@@ -1,0 +1,141 @@
+name: FlexFare CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: npm run lint
+    
+    - name: Run tests
+      run: npm test
+  
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Build and push Frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        push: true
+        tags: flexfare/frontend:latest
+    
+    - name: Build and push API Gateway
+      uses: docker/build-push-action@v4
+      with:
+        context: ./api-gateway
+        push: true
+        tags: flexfare/api-gateway:latest
+    
+    - name: Build and push Auth Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./auth-service
+        push: true
+        tags: flexfare/auth-service:latest
+    
+    - name: Build and push Ticket Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./ticket-service
+        push: true
+        tags: flexfare/ticket-service:latest
+    
+    - name: Build and push Pricing Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./pricing-service
+        push: true
+        tags: flexfare/pricing-service:latest
+    
+    - name: Build and push Payment Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./payment-service
+        push: true
+        tags: flexfare/payment-service:latest
+    
+    - name: Build and push Fraud Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./fraud-service
+        push: true
+        tags: flexfare/fraud-service:latest
+    
+    - name: Build and push Notification Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./notification-service
+        push: true
+        tags: flexfare/notification-service:latest
+    
+    - name: Build and push Event Bus
+      uses: docker/build-push-action@v4
+      with:
+        context: ./event-bus
+        push: true
+        tags: flexfare/event-bus:latest
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+    
+    - name: Set Kubernetes context
+      uses: azure/k8s-set-context@v3
+      with:
+        kubeconfig: ${{ secrets.KUBE_CONFIG }}
+    
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f kubernetes/
+        kubectl rollout restart deployment/frontend
+        kubectl rollout restart deployment/api-gateway
+        kubectl rollout restart deployment/auth-service
+        kubectl rollout restart deployment/ticket-service
+        kubectl rollout restart deployment/pricing-service
+        kubectl rollout restart deployment/payment-service
+        kubectl rollout restart deployment/fraud-service
+        kubectl rollout restart deployment/notification-service
+        kubectl rollout restart deployment/event-bus
+

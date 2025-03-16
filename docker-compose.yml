@@ -1,0 +1,198 @@
+version: '3.8'
+
+services:
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - API_GATEWAY_URL=http://api-gateway:4000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+
+  # API Gateway service
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - AUTH_SERVICE_URL=http://auth-service:4001
+      - TICKET_SERVICE_URL=http://ticket-service:4002
+      - PRICING_SERVICE_URL=http://pricing-service:4003
+      - PAYMENT_SERVICE_URL=http://payment-service:4004
+      - FRAUD_SERVICE_URL=http://fraud-service:4005
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4006
+    volumes:
+      - ./api-gateway:/app
+      - /app/node_modules
+    depends_on:
+      - auth-service
+      - ticket-service
+      - pricing-service
+      - payment-service
+      - fraud-service
+      - notification-service
+
+  # Authentication service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/flexfare_auth
+      - JWT_SECRET=your_jwt_secret_key_here
+    volumes:
+      - ./auth-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+
+  # Ticket service
+  ticket-service:
+    build:
+      context: ./ticket-service
+      dockerfile: Dockerfile
+    ports:
+      - "4002:4002"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/flexfare_tickets
+      - EVENT_BUS_URL=http://event-bus:4100
+    volumes:
+      - ./ticket-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - event-bus
+
+  # Pricing service
+  pricing-service:
+    build:
+      context: ./pricing-service
+      dockerfile: Dockerfile
+    ports:
+      - "4003:4003"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/flexfare_pricing
+      - EVENT_BUS_URL=http://event-bus:4100
+    volumes:
+      - ./pricing-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - event-bus
+
+  # Payment service
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    ports:
+      - "4004:4004"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/flexfare_payments
+      - EVENT_BUS_URL=http://event-bus:4100
+      - STRIPE_API_KEY=your_stripe_api_key_here
+      - PAYPAL_CLIENT_ID=your_paypal_client_id_here
+      - PAYPAL_CLIENT_SECRET=your_paypal_client_secret_here
+    volumes:
+      - ./payment-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - event-bus
+
+  # Fraud detection service
+  fraud-service:
+    build:
+      context: ./fraud-service
+      dockerfile: Dockerfile
+    ports:
+      - "4005:4005"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/flexfare_fraud
+      - EVENT_BUS_URL=http://event-bus:4100
+    volumes:
+      - ./fraud-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - event-bus
+
+  # Notification service
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    ports:
+      - "4006:4006"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/flexfare_notifications
+      - EVENT_BUS_URL=http://event-bus:4100
+      - SENDGRID_API_KEY=your_sendgrid_api_key_here
+    volumes:
+      - ./notification-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - event-bus
+
+  # Event bus service
+  event-bus:
+    build:
+      context: ./event-bus
+      dockerfile: Dockerfile
+    ports:
+      - "4100:4100"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./event-bus:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_MULTIPLE_DATABASES=flexfare_auth,flexfare_tickets,flexfare_pricing,flexfare_payments,flexfare_fraud,flexfare_notifications
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+
+  # Redis for caching and event bus
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+  redis-data:
+
